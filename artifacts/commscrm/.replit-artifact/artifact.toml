@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CommsCRM"
+version = "1.0.0"
+id = "artifacts/commscrm"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24810
+
+[services.development]
+run = "pnpm --filter @workspace/commscrm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/commscrm", "run", "build" ]
+publicDir = "artifacts/commscrm/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24810"
+BASE_PATH = "/"
