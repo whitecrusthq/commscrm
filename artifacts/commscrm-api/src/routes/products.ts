@@ -239,6 +239,19 @@ router.post("/product-sources/:id/sync", requireAuth, async (req: AuthRequest, r
   }
 });
 
+router.put("/products/bulk/currency", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currency } = req.body;
+    if (!currency || typeof currency !== "string" || currency.length !== 3) {
+      return res.status(400).json({ error: "Invalid currency code" });
+    }
+    const [count] = await Product.update({ currency: currency.toUpperCase() }, { where: {} });
+    res.json({ updated: count });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post("/product-webhook/:secret", async (req: Request, res: Response) => {
   try {
     const source = await ProductSource.findOne({

@@ -1983,6 +1983,14 @@ export default function Settings() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">Used as the default currency across products, payments, and invoices.</p>
+                    <Button variant="outline" size="sm" className="gap-1.5 mt-1" onClick={async () => {
+                      try {
+                        await apiPut("/products/bulk/currency", { currency: brandingCurrency });
+                        toast({ title: "Currency updated", description: `All existing products updated to ${brandingCurrency}.` });
+                      } catch { toast({ title: "Failed to update products", variant: "destructive" }); }
+                    }}>
+                      <Banknote className="h-3.5 w-3.5" /> Apply to all existing products
+                    </Button>
                   </div>
                   <Separator />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

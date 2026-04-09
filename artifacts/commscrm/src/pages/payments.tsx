@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBranding } from "@/lib/branding-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -684,10 +685,11 @@ function AnalyticsTab() {
 function PaymentLinksTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { defaultCurrency } = useBranding();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     provider: "stripe", title: "", description: "", amount: "",
-    currency: "USD", customerName: "", customerEmail: "", expiresInDays: "7",
+    currency: defaultCurrency || "USD", customerName: "", customerEmail: "", expiresInDays: "7",
   });
   const [copiedId, setCopiedId] = useState<number | null>(null);
 
@@ -702,7 +704,7 @@ function PaymentLinksTab() {
       queryClient.invalidateQueries({ queryKey: ["payment-links"] });
       toast({ title: "Payment link created" });
       setShowCreate(false);
-      setForm({ provider: "stripe", title: "", description: "", amount: "", currency: "USD", customerName: "", customerEmail: "", expiresInDays: "7" });
+      setForm({ provider: "stripe", title: "", description: "", amount: "", currency: defaultCurrency || "USD", customerName: "", customerEmail: "", expiresInDays: "7" });
     },
     onError: () => toast({ title: "Failed to create link", variant: "destructive" }),
   });

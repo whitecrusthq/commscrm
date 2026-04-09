@@ -19,6 +19,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+function fmtPrice(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+  } catch {
+    return `${currency} ${Number(amount).toFixed(2)}`;
+  }
+}
+
 interface ProductType {
   id: number;
   externalId: string | null;
@@ -174,7 +182,7 @@ function CatalogTab() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-bold text-primary">
-                      {p.currency} {Number(p.price).toFixed(2)}
+                      {fmtPrice(Number(p.price), p.currency)}
                     </span>
                     {p.stockQty != null && (
                       <Badge variant={p.stockQty > 0 ? "default" : "destructive"} className="text-xs">
