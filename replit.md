@@ -15,9 +15,11 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ### CommsCRM (Independent Project)
 - **Frontend**: `artifacts/commscrm` — React + Vite, Tailwind CSS, wouter, TanStack Query
 - **Backend**: `artifacts/commscrm-api` — Express 5, Sequelize ORM, PostgreSQL, JWT auth
-- **Backend Port**: 8081
-- **Frontend proxies** `/api` to backend at `localhost:8081`
+- **Backend Port**: 3001
+- **Frontend proxies** `/crm-api` to backend at `localhost:3001`
 - **Completely independent** from the main project — no shared dependencies with `api-server`, `api-spec`, `api-zod`, or `db` packages
+- **AI Assistant**: Supports multiple providers (Gemini, OpenAI, Anthropic, custom). Features knowledge base (document upload), exception table (topics AI must refuse), system prompt editor, and test chat.
+- **AI Exceptions**: `crm_ai_exceptions` table — CRUD at `/crm-api/ai/exceptions`. Active exceptions are injected into all AI prompts as restricted topics.
 
 ## Stack
 
@@ -38,7 +40,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ### CommsCRM
 - `pnpm --filter @workspace/commscrm run dev` — run CommsCRM frontend
-- `PORT=8081 pnpm --filter @workspace/commscrm-api run dev` — run CommsCRM backend
+- `PORT=3001 pnpm --filter @workspace/commscrm-api run dev` — run CommsCRM backend
 - `pnpm --filter @workspace/commscrm-api run build` — build CommsCRM backend
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

@@ -12,9 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, Bot, User, Trash2, Settings2, Sparkles, Upload, FileText, FileType2, Trash, Eye, X, BookOpen, MessageSquare, CheckCircle2, XCircle, Eye as EyeOn, EyeOff, ChevronDown, Zap, Key } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Send, Loader2, Bot, User, Trash2, Settings2, Sparkles, Upload, FileText, FileType2, Trash, Eye, X, BookOpen, MessageSquare, CheckCircle2, XCircle, Eye as EyeOn, EyeOff, ChevronDown, Zap, Key, ShieldBan, Plus, Pencil } from "lucide-react";
 import { format } from "date-fns";
-import { apiGet, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
 
 interface ChatMessage {
   id: string;
@@ -29,6 +30,14 @@ interface KnowledgeDoc {
   originalName: string;
   mimeType: string;
   sizeBytes: number;
+  createdAt: string;
+}
+
+interface AiException {
+  id: number;
+  phrase: string;
+  reason: string | null;
+  isActive: boolean;
   createdAt: string;
 }
 
@@ -143,6 +152,12 @@ export default function AiChat() {
   const [previewDoc, setPreviewDoc] = useState<{ name: string; content: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Exception state
+  const [exceptionPhrase, setExceptionPhrase] = useState("");
+  const [exceptionReason, setExceptionReason] = useState("");
+  const [editingException, setEditingException] = useState<AiException | null>(null);
+  const [showExceptionForm, setShowExceptionForm] = useState(false);
+
   // Provider settings form state
   const [editProvider, setEditProvider] = useState("gemini");
   const [editModel, setEditModel] = useState("gemini-2.5-flash");
@@ -194,6 +209,45 @@ export default function AiChat() {
       toast({ title: "Document removed from knowledge base" });
     },
     onError: () => toast({ title: "Failed to delete document", variant: "destructive" }),
+  });
+
+  const { data: exceptions = [], isLoading: exceptionsLoading } = useQuery<AiException[]>({
+    queryKey: ["ai-exceptions"],
+    queryFn: () => apiGet("/ai/exceptions"),
+  });
+
+  const createExceptionMutation = useMutation({
+    mutationFn: (data: { phrase: string; reason?: string }) => apiPost("/ai/exceptions", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-exceptions"] });
+      setExceptionPhrase("");
+      setExceptionReason("");
+      setShowExceptionForm(false);
+      toast({ title: "Exception added" });
+    },
+    onError: () => toast({ title: "Failed to add exception", variant: "destructive" }),
+  });
+
+  const updateExceptionMutation = useMutation({
+    mutationFn: ({ id, ...data }: { id: number; phrase?: string; reason?: string; isActive?: boolean }) => apiPut(`/ai/exceptions/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-exceptions"] });
+      setEditingException(null);
+      setExceptionPhrase("");
+      setExceptionReason("");
+      setShowExceptionForm(false);
+      toast({ title: "Exception updated" });
+    },
+    onError: () => toast({ title: "Failed to update exception", variant: "destructive" }),
+  });
+
+  const deleteExceptionMutation = useMutation({
+    mutationFn: (id: number) => apiDelete(`/ai/exceptions/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-exceptions"] });
+      toast({ title: "Exception removed" });
+    },
+    onError: () => toast({ title: "Failed to delete exception", variant: "destructive" }),
   });
 
   const uploadFile = useCallback(async (file: File) => {
@@ -367,6 +421,10 @@ export default function AiChat() {
           </TabsTrigger>
           <TabsTrigger value="chat" className="gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
             <MessageSquare className="h-4 w-4" /> Test Chat
+          </TabsTrigger>
+          <TabsTrigger value="exceptions" className="gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
+            <ShieldBan className="h-4 w-4" /> Exceptions
+            {exceptions.filter(e => e.isActive).length > 0 && <span className="ml-0.5 h-2 w-2 rounded-full bg-orange-500 inline-block" />}
           </TabsTrigger>
           <TabsTrigger value="prompt" className="gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
             <Zap className="h-4 w-4" /> System Prompt
@@ -789,6 +847,156 @@ export default function AiChat() {
                     <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">3</Badge> Unresolved issues escalate to a human agent</li>
                     <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">4</Badge> Agent replies with AI-suggested messages</li>
                   </ul>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Exceptions Tab */}
+        <TabsContent value="exceptions">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Exception List</CardTitle>
+                    <CardDescription>Topics and phrases the AI will refuse to discuss or respond to.</CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditingException(null);
+                      setExceptionPhrase("");
+                      setExceptionReason("");
+                      setShowExceptionForm(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add Exception
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {showExceptionForm && (
+                  <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
+                    <div>
+                      <Label className="text-sm">Topic / Phrase</Label>
+                      <Input
+                        className="mt-1.5"
+                        placeholder='e.g. "competitor pricing", "internal salary info"'
+                        value={exceptionPhrase}
+                        onChange={(e) => setExceptionPhrase(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Reason (optional)</Label>
+                      <Input
+                        className="mt-1.5"
+                        placeholder="Why this topic is restricted..."
+                        value={exceptionReason}
+                        onChange={(e) => setExceptionReason(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={!exceptionPhrase.trim() || createExceptionMutation.isPending || updateExceptionMutation.isPending}
+                        onClick={() => {
+                          if (editingException) {
+                            updateExceptionMutation.mutate({ id: editingException.id, phrase: exceptionPhrase, reason: exceptionReason || undefined });
+                          } else {
+                            createExceptionMutation.mutate({ phrase: exceptionPhrase, reason: exceptionReason || undefined });
+                          }
+                        }}
+                      >
+                        {(createExceptionMutation.isPending || updateExceptionMutation.isPending) && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                        {editingException ? "Update" : "Add"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setShowExceptionForm(false);
+                          setEditingException(null);
+                          setExceptionPhrase("");
+                          setExceptionReason("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {exceptionsLoading ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading...
+                  </div>
+                ) : exceptions.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <ShieldBan className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">No exceptions yet</p>
+                    <p className="text-xs mt-1">Add topics or phrases the AI should never respond to.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {exceptions.map((ex) => (
+                      <div key={ex.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${ex.isActive ? "bg-background" : "bg-muted/30 opacity-60"}`}>
+                        <Switch
+                          checked={ex.isActive}
+                          onCheckedChange={(checked) => updateExceptionMutation.mutate({ id: ex.id, isActive: checked })}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{ex.phrase}</p>
+                          {ex.reason && <p className="text-xs text-muted-foreground truncate">{ex.reason}</p>}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setEditingException(ex);
+                              setExceptionPhrase(ex.phrase);
+                              setExceptionReason(ex.reason || "");
+                              setShowExceptionForm(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                            onClick={() => deleteExceptionMutation.mutate(ex.id)}
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">How exceptions work</CardTitle></CardHeader>
+                <CardContent className="text-xs text-muted-foreground space-y-2">
+                  <p>• Add topics or phrases the AI should refuse to discuss</p>
+                  <p>• Active exceptions are injected into every AI prompt</p>
+                  <p>• The AI will politely decline and offer to help with something else</p>
+                  <p>• Toggle exceptions on/off without deleting them</p>
+                  <p>• Useful for blocking competitor info, sensitive data, or off-topic requests</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Example exceptions</CardTitle></CardHeader>
+                <CardContent className="text-xs text-muted-foreground space-y-2">
+                  <p>• "competitor pricing" — Confidential</p>
+                  <p>• "internal salary" — HR policy</p>
+                  <p>• "political opinions" — Off-topic</p>
+                  <p>• "legal advice" — Liability risk</p>
                 </CardContent>
               </Card>
             </div>

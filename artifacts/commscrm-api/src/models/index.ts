@@ -24,6 +24,7 @@ export { PaymentTransaction } from "./PaymentTransaction.js";
 export type { TxStatus, TxProvider, TxCurrency } from "./PaymentTransaction.js";
 export { PaymentLink } from "./PaymentLink.js";
 export type { LinkStatus } from "./PaymentLink.js";
+export { AiException } from "./AiException.js";
 
 import { Agent } from "./Agent.js";
 import { Customer } from "./Customer.js";
