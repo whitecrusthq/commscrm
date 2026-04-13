@@ -48,7 +48,9 @@ Thumbs.db
 .agents/
 artifacts/
 scripts/
-lib/
+/lib/
+!backend/src/lib/
+!frontend/src/lib/
 /pnpm-workspace.yaml
 /pnpm-lock.yaml
 /tsconfig.base.json
