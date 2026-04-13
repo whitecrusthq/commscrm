@@ -3,7 +3,7 @@ import { Op } from "sequelize";
 import { Campaign, Customer } from "../models/index.js";
 import { requireAuth, AuthRequest } from "../middlewares/auth.js";
 import { getEmailSettings, buildMailgunConfig, sendEmail } from "../lib/mailgun.js";
-import { getMessagingSettings, buildTwilioConfig, sendSms, sendWhatsapp } from "../lib/twilio.js";
+import { getMessagingSettings, sendSms, sendWhatsapp } from "../lib/sms-providers.js";
 
 const router = Router();
 
@@ -49,9 +49,7 @@ router.put("/campaigns/:id", requireAuth, async (req: AuthRequest, res) => {
 
     if (status && status !== campaign.status) {
       campaign.status = status;
-      if (status === "sent") {
-        campaign.sentAt = new Date();
-      }
+      if (status === "sent") campaign.sentAt = new Date();
     }
 
     if (scheduledAt) campaign.scheduledAt = new Date(scheduledAt);
@@ -91,12 +89,12 @@ router.post("/campaigns/:id/send", requireAuth, async (req: AuthRequest, res) =>
     if (channel === "email") {
       const emailSettings = await getEmailSettings();
       if (!emailSettings?.isActive) {
-        res.status(400).json({ error: "Email (Mailgun) is not configured or not active. Go to Settings → Email to set it up." });
+        res.status(400).json({ error: "Email (Mailgun) is not configured or not active. Go to Settings \u2192 Email to set it up." });
         return;
       }
       const config = await buildMailgunConfig(emailSettings);
       if (!config) {
-        res.status(400).json({ error: "Mailgun configuration is incomplete (missing API key, domain, or from email)." });
+        res.status(400).json({ error: "Mailgun configuration is incomplete." });
         return;
       }
 
@@ -128,12 +126,7 @@ router.post("/campaigns/:id/send", requireAuth, async (req: AuthRequest, res) =>
     } else if (channel === "sms") {
       const msgSettings = await getMessagingSettings();
       if (!msgSettings?.smsEnabled) {
-        res.status(400).json({ error: "SMS is not enabled. Go to Settings → Messaging to configure Twilio SMS." });
-        return;
-      }
-      const config = await buildTwilioConfig(msgSettings);
-      if (!config || !config.phoneNumber) {
-        res.status(400).json({ error: "Twilio SMS configuration is incomplete (missing Account SID, Auth Token, or Phone Number)." });
+        res.status(400).json({ error: "SMS is not enabled. Go to Settings \u2192 SMS & WhatsApp to configure your SMS provider." });
         return;
       }
 
@@ -148,23 +141,18 @@ router.post("/campaigns/:id/send", requireAuth, async (req: AuthRequest, res) =>
       }
 
       for (const phone of phones) {
-        try {
-          await sendSms(config, { to: phone, body: campaign.message });
+        const result = await sendSms(msgSettings, phone, campaign.message);
+        if (result.success) {
           sent++;
-        } catch (err) {
+        } else {
           failed++;
-          if (errors.length < 5) errors.push(`${phone}: ${err instanceof Error ? err.message : "Failed"}`);
+          if (errors.length < 5) errors.push(`${phone}: ${result.error}`);
         }
       }
     } else if (channel === "whatsapp") {
       const msgSettings = await getMessagingSettings();
       if (!msgSettings?.whatsappEnabled) {
-        res.status(400).json({ error: "WhatsApp is not enabled. Go to Settings → Messaging to configure Twilio WhatsApp." });
-        return;
-      }
-      const config = await buildTwilioConfig(msgSettings);
-      if (!config || !config.whatsappNumber) {
-        res.status(400).json({ error: "Twilio WhatsApp configuration is incomplete (missing Account SID, Auth Token, or WhatsApp Number)." });
+        res.status(400).json({ error: "WhatsApp is not enabled. Go to Settings \u2192 SMS & WhatsApp to configure Twilio WhatsApp." });
         return;
       }
 
@@ -179,16 +167,16 @@ router.post("/campaigns/:id/send", requireAuth, async (req: AuthRequest, res) =>
       }
 
       for (const phone of phones) {
-        try {
-          await sendWhatsapp(config, { to: phone, body: campaign.message });
+        const result = await sendWhatsapp(msgSettings, phone, campaign.message);
+        if (result.success) {
           sent++;
-        } catch (err) {
+        } else {
           failed++;
-          if (errors.length < 5) errors.push(`${phone}: ${err instanceof Error ? err.message : "Failed"}`);
+          if (errors.length < 5) errors.push(`${phone}: ${result.error}`);
         }
       }
     } else {
-      res.status(400).json({ error: `Sending is not supported for channel "${channel}". Supported: email, sms, whatsapp.` });
+      res.status(400).json({ error: `Sending not supported for "${channel}". Supported: email, sms, whatsapp.` });
       return;
     }
 
@@ -212,7 +200,7 @@ router.get("/campaigns/channels-status", requireAuth, async (_req: AuthRequest, 
 
     res.json({
       email: { configured: !!emailSettings?.isActive, provider: "Mailgun" },
-      sms: { configured: !!msgSettings?.smsEnabled, provider: "Twilio" },
+      sms: { configured: !!msgSettings?.smsEnabled, provider: msgSettings?.smsProvider ?? "none" },
       whatsapp: { configured: !!msgSettings?.whatsappEnabled, provider: "Twilio" },
     });
   } catch (err) {

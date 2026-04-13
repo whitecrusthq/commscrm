@@ -656,36 +656,69 @@ export default function Settings() {
     }
   };
 
-  // ── Twilio Messaging state ──────────────────────────────────────────────────
+  // ── SMS/WhatsApp Messaging state ────────────────────────────────────────────
+  type SmsProvider = "twilio" | "africastalking" | "termii" | "vonage" | "infobip" | "custom";
   interface MsgConfig {
     id: number;
-    provider: string;
-    hasAccountSid: boolean;
-    hasAuthToken: boolean;
-    twilioPhoneNumber: string | null;
+    smsProvider: SmsProvider;
+    hasApiKey: boolean;
+    hasApiSecret: boolean;
+    senderId: string | null;
+    baseUrl: string | null;
+    extraConfig: Record<string, string> | null;
     twilioWhatsappNumber: string | null;
     smsEnabled: boolean;
     whatsappEnabled: boolean;
   }
-  const [twAccountSid, setTwAccountSid] = useState("");
-  const [twAuthToken, setTwAuthToken] = useState("");
-  const [twPhoneNumber, setTwPhoneNumber] = useState("");
-  const [twWhatsappNumber, setTwWhatsappNumber] = useState("");
-  const [twSmsEnabled, setTwSmsEnabled] = useState(false);
-  const [twWhatsappEnabled, setTwWhatsappEnabled] = useState(false);
-  const [showTwSid, setShowTwSid] = useState(false);
-  const [showTwToken, setShowTwToken] = useState(false);
-  const [twTesting, setTwTesting] = useState(false);
-  const [twTestResult, setTwTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const SMS_PROVIDERS = [
+    { value: "twilio" as SmsProvider,          label: "Twilio",             description: "Global SMS & WhatsApp" },
+    { value: "africastalking" as SmsProvider,  label: "Africa's Talking",   description: "Popular across Africa" },
+    { value: "termii" as SmsProvider,          label: "Termii",             description: "Nigeria-focused SMS" },
+    { value: "vonage" as SmsProvider,          label: "Vonage (Nexmo)",     description: "Global SMS platform" },
+    { value: "infobip" as SmsProvider,         label: "Infobip",            description: "Enterprise messaging" },
+    { value: "custom" as SmsProvider,          label: "Custom HTTP API",    description: "Any provider with HTTP API" },
+  ];
+
+  const PROVIDER_FIELDS: Record<SmsProvider, { keyLabel: string; keyPlaceholder: string; secretLabel?: string; secretPlaceholder?: string; senderLabel: string; senderPlaceholder: string; needsBaseUrl?: boolean; baseUrlLabel?: string; baseUrlPlaceholder?: string; needsExtra?: boolean }> = {
+    twilio: { keyLabel: "Account SID", keyPlaceholder: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", secretLabel: "Auth Token", secretPlaceholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", senderLabel: "Phone Number", senderPlaceholder: "+1234567890" },
+    africastalking: { keyLabel: "API Key", keyPlaceholder: "atsk_xxxxxxxxxxxxxxxxxxxxxxxx", senderLabel: "Username", senderPlaceholder: "sandbox or your_username", needsExtra: true },
+    termii: { keyLabel: "API Key", keyPlaceholder: "TLxxxxxxxxxxxxxxxxxxxxxxxx", senderLabel: "Sender ID", senderPlaceholder: "CommsCRM" },
+    vonage: { keyLabel: "API Key", keyPlaceholder: "abcd1234", secretLabel: "API Secret", secretPlaceholder: "xxxxxxxxxxxxxxxx", senderLabel: "Sender ID / Number", senderPlaceholder: "+1234567890 or CommsCRM" },
+    infobip: { keyLabel: "API Key", keyPlaceholder: "xxxxxxxxxxxxxxxxxxxxxxxx", senderLabel: "Sender ID", senderPlaceholder: "CommsCRM", needsBaseUrl: true, baseUrlLabel: "Base URL", baseUrlPlaceholder: "xxxxx.api.infobip.com" },
+    custom: { keyLabel: "API Key (optional)", keyPlaceholder: "your-api-key", secretLabel: "API Secret (optional)", secretPlaceholder: "your-api-secret", senderLabel: "Sender ID / From", senderPlaceholder: "CommsCRM", needsBaseUrl: true, baseUrlLabel: "API Endpoint URL", baseUrlPlaceholder: "https://api.provider.com/sms/send", needsExtra: true },
+  };
+
+  const [msgProvider, setMsgProvider] = useState<SmsProvider>("twilio");
+  const [msgApiKey, setMsgApiKey] = useState("");
+  const [msgApiSecret, setMsgApiSecret] = useState("");
+  const [msgSenderId, setMsgSenderId] = useState("");
+  const [msgBaseUrl, setMsgBaseUrl] = useState("");
+  const [msgExtraFrom, setMsgExtraFrom] = useState("");
+  const [msgCustomBodyTemplate, setMsgCustomBodyTemplate] = useState('{"to":"{{to}}","message":"{{message}}","from":"{{from}}"}');
+  const [msgCustomAuthHeader, setMsgCustomAuthHeader] = useState("Bearer {{apiKey}}");
+  const [msgWhatsappNumber, setMsgWhatsappNumber] = useState("");
+  const [msgSmsEnabled, setMsgSmsEnabled] = useState(false);
+  const [msgWhatsappEnabled, setMsgWhatsappEnabled] = useState(false);
+  const [showMsgKey, setShowMsgKey] = useState(false);
+  const [showMsgSecret, setShowMsgSecret] = useState(false);
+  const [msgTesting, setMsgTesting] = useState(false);
+  const [msgTestResult, setMsgTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const { data: msgConfig, isLoading: msgLoading } = useQuery<MsgConfig>({
     queryKey: ["messaging-settings"],
     queryFn: () => apiGet("/messaging-settings"),
     onSuccess: (d: MsgConfig) => {
-      setTwPhoneNumber(d.twilioPhoneNumber ?? "");
-      setTwWhatsappNumber(d.twilioWhatsappNumber ?? "");
-      setTwSmsEnabled(d.smsEnabled ?? false);
-      setTwWhatsappEnabled(d.whatsappEnabled ?? false);
+      setMsgProvider(d.smsProvider ?? "twilio");
+      setMsgSenderId(d.senderId ?? "");
+      setMsgBaseUrl(d.baseUrl ?? "");
+      setMsgWhatsappNumber(d.twilioWhatsappNumber ?? "");
+      setMsgSmsEnabled(d.smsEnabled ?? false);
+      setMsgWhatsappEnabled(d.whatsappEnabled ?? false);
+      if (d.extraConfig) {
+        setMsgExtraFrom(d.extraConfig.from ?? "");
+        setMsgCustomBodyTemplate(d.extraConfig.bodyTemplate ?? '{"to":"{{to}}","message":"{{message}}","from":"{{from}}"}');
+        setMsgCustomAuthHeader(d.extraConfig.authHeader ?? "Bearer {{apiKey}}");
+      }
     },
   } as Parameters<typeof useQuery>[0]);
 
@@ -693,24 +726,45 @@ export default function Settings() {
     mutationFn: (data: Record<string, unknown>) => apiPut("/messaging-settings", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["messaging-settings"] });
-      setTwTestResult(null);
-      toast({ title: "Messaging settings saved!", description: "Twilio configuration updated." });
+      setMsgTestResult(null);
+      toast({ title: "Messaging settings saved!" });
     },
     onError: () => toast({ title: "Failed to save settings", variant: "destructive" }),
   });
 
-  const testTwilio = async () => {
-    setTwTesting(true);
-    setTwTestResult(null);
+  const testMsgProvider = async () => {
+    setMsgTesting(true);
+    setMsgTestResult(null);
     try {
       const res = await apiPost<{ ok: boolean; message: string }>("/messaging-settings/test", {});
-      setTwTestResult(res);
+      setMsgTestResult(res);
     } catch {
-      setTwTestResult({ ok: false, message: "Network error" });
+      setMsgTestResult({ ok: false, message: "Network error" });
     } finally {
-      setTwTesting(false);
+      setMsgTesting(false);
     }
   };
+
+  function buildMsgSavePayload() {
+    const extra: Record<string, string> = {};
+    if (msgProvider === "africastalking" && msgExtraFrom) extra.from = msgExtraFrom;
+    if (msgProvider === "custom") {
+      extra.bodyTemplate = msgCustomBodyTemplate;
+      extra.authHeader = msgCustomAuthHeader;
+      extra.method = "POST";
+    }
+    return {
+      smsProvider: msgProvider,
+      apiKey: msgApiKey || undefined,
+      apiSecret: msgApiSecret || undefined,
+      senderId: msgSenderId,
+      baseUrl: msgBaseUrl || undefined,
+      extraConfig: Object.keys(extra).length > 0 ? extra : undefined,
+      twilioWhatsappNumber: msgWhatsappNumber || undefined,
+      smsEnabled: msgSmsEnabled,
+      whatsappEnabled: msgWhatsappEnabled,
+    };
+  }
 
   const handleSave = () => {
     toast({ title: "Settings Saved", description: "Your configuration has been updated successfully." });
@@ -1731,25 +1785,25 @@ export default function Settings() {
             <>
               <div>
                 <h2 className="text-xl font-bold">SMS & WhatsApp Messaging</h2>
-                <p className="text-sm text-muted-foreground mt-1">Connect Twilio to send bulk SMS and WhatsApp messages from Campaigns.</p>
+                <p className="text-sm text-muted-foreground mt-1">Connect your SMS provider to send bulk messages from Campaigns.</p>
               </div>
               <Card>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-[#F22F46]/10 flex items-center justify-center">
-                        <MessageCircle className="h-5 w-5 text-[#F22F46]" />
+                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                        <MessageCircle className="h-5 w-5 text-blue-600" />
                       </div>
                       <div>
                         <CardTitle className="flex items-center gap-2">
-                          Twilio
+                          SMS Provider
                           {(msgConfig?.smsEnabled || msgConfig?.whatsappEnabled) ? (
                             <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">Active</Badge>
                           ) : (
                             <Badge variant="secondary">Inactive</Badge>
                           )}
                         </CardTitle>
-                        <CardDescription>API credentials for SMS and WhatsApp messaging</CardDescription>
+                        <CardDescription>Choose your SMS provider and enter credentials</CardDescription>
                       </div>
                     </div>
                   </div>
@@ -1759,47 +1813,112 @@ export default function Settings() {
                     <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="sm:col-span-2">
-                          <Label className="flex items-center gap-1.5 mb-1.5">
-                            Account SID
-                            {msgConfig?.hasAccountSid && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
-                          </Label>
-                          <div className="relative">
-                            <Input
-                              type={showTwSid ? "text" : "password"}
-                              placeholder={msgConfig?.hasAccountSid ? "••••••••• (leave blank to keep existing)" : "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
-                              value={twAccountSid}
-                              onChange={(e) => setTwAccountSid(e.target.value)}
-                              className="pr-10 font-mono text-sm"
-                            />
-                            <button onClick={() => setShowTwSid((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
-                              {showTwSid ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      <div>
+                        <Label className="mb-2 block">SMS Provider</Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {SMS_PROVIDERS.map((p) => (
+                            <button
+                              key={p.value}
+                              type="button"
+                              onClick={() => setMsgProvider(p.value)}
+                              className={`p-3 rounded-lg border text-left transition-all ${
+                                msgProvider === p.value
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                  : "border-border hover:border-primary/40 hover:bg-muted/50"
+                              }`}
+                            >
+                              <p className="text-sm font-medium">{p.label}</p>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{p.description}</p>
                             </button>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Find this at <span className="font-mono">console.twilio.com → Account Info</span>
-                          </p>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <Label className="flex items-center gap-1.5 mb-1.5">
-                            Auth Token
-                            {msgConfig?.hasAuthToken && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
-                          </Label>
-                          <div className="relative">
-                            <Input
-                              type={showTwToken ? "text" : "password"}
-                              placeholder={msgConfig?.hasAuthToken ? "••••••••• (leave blank to keep existing)" : "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
-                              value={twAuthToken}
-                              onChange={(e) => setTwAuthToken(e.target.value)}
-                              className="pr-10 font-mono text-sm"
-                            />
-                            <button onClick={() => setShowTwToken((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
-                              {showTwToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                          </div>
+                          ))}
                         </div>
                       </div>
+
+                      <Separator />
+
+                      {(() => {
+                        const fields = PROVIDER_FIELDS[msgProvider];
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className={fields.secretLabel ? "" : "sm:col-span-2"}>
+                              <Label className="flex items-center gap-1.5 mb-1.5">
+                                {fields.keyLabel}
+                                {msgConfig?.hasApiKey && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
+                              </Label>
+                              <div className="relative">
+                                <Input
+                                  type={showMsgKey ? "text" : "password"}
+                                  placeholder={msgConfig?.hasApiKey ? "Leave blank to keep existing" : fields.keyPlaceholder}
+                                  value={msgApiKey}
+                                  onChange={(e) => setMsgApiKey(e.target.value)}
+                                  className="pr-10 font-mono text-sm"
+                                />
+                                <button onClick={() => setShowMsgKey((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                                  {showMsgKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            </div>
+                            {fields.secretLabel && (
+                              <div>
+                                <Label className="flex items-center gap-1.5 mb-1.5">
+                                  {fields.secretLabel}
+                                  {msgConfig?.hasApiSecret && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    type={showMsgSecret ? "text" : "password"}
+                                    placeholder={msgConfig?.hasApiSecret ? "Leave blank to keep existing" : fields.secretPlaceholder}
+                                    value={msgApiSecret}
+                                    onChange={(e) => setMsgApiSecret(e.target.value)}
+                                    className="pr-10 font-mono text-sm"
+                                  />
+                                  <button onClick={() => setShowMsgSecret((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                                    {showMsgSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <Label className="mb-1.5">{fields.senderLabel}</Label>
+                              <Input placeholder={fields.senderPlaceholder} value={msgSenderId} onChange={(e) => setMsgSenderId(e.target.value)} className="font-mono text-sm" />
+                            </div>
+                            {fields.needsBaseUrl && (
+                              <div>
+                                <Label className="mb-1.5">{fields.baseUrlLabel}</Label>
+                                <Input placeholder={fields.baseUrlPlaceholder} value={msgBaseUrl} onChange={(e) => setMsgBaseUrl(e.target.value)} className="font-mono text-sm" />
+                              </div>
+                            )}
+                            {msgProvider === "africastalking" && (
+                              <div>
+                                <Label className="mb-1.5">Sender Name (optional)</Label>
+                                <Input placeholder="Your registered short code or alphanumeric" value={msgExtraFrom} onChange={(e) => setMsgExtraFrom(e.target.value)} className="text-sm" />
+                                <p className="text-xs text-muted-foreground mt-1">Leave blank for default/sandbox</p>
+                              </div>
+                            )}
+                            {msgProvider === "custom" && (
+                              <>
+                                <div className="sm:col-span-2">
+                                  <Label className="mb-1.5">Authorization Header</Label>
+                                  <Input placeholder="Bearer {{apiKey}}" value={msgCustomAuthHeader} onChange={(e) => setMsgCustomAuthHeader(e.target.value)} className="font-mono text-sm" />
+                                  <p className="text-xs text-muted-foreground mt-1">Use {"{{apiKey}}"} and {"{{apiSecret}}"} as placeholders</p>
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <Label className="mb-1.5">Request Body Template (JSON)</Label>
+                                  <Textarea
+                                    rows={4}
+                                    placeholder={'{"to":"{{to}}","message":"{{message}}","from":"{{from}}"}'}
+                                    value={msgCustomBodyTemplate}
+                                    onChange={(e) => setMsgCustomBodyTemplate(e.target.value)}
+                                    className="font-mono text-sm"
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-1">Use {"{{to}}"}, {"{{message}}"}, {"{{from}}"}, {"{{apiKey}}"} as placeholders</p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       <Separator />
                       <div className="space-y-4">
                         <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
@@ -1812,20 +1931,8 @@ export default function Settings() {
                               <p className="text-xs text-muted-foreground">Send bulk SMS to customers with phone numbers</p>
                             </div>
                           </div>
-                          <Switch checked={twSmsEnabled} onCheckedChange={setTwSmsEnabled} />
+                          <Switch checked={msgSmsEnabled} onCheckedChange={setMsgSmsEnabled} />
                         </div>
-                        {twSmsEnabled && (
-                          <div className="pl-4 border-l-2 border-blue-200 dark:border-blue-800">
-                            <Label className="mb-1.5">Twilio Phone Number (SMS)</Label>
-                            <Input
-                              placeholder="+1234567890"
-                              value={twPhoneNumber}
-                              onChange={(e) => setTwPhoneNumber(e.target.value)}
-                              className="font-mono text-sm max-w-sm"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">Your Twilio phone number for sending SMS</p>
-                          </div>
-                        )}
 
                         <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
                           <div className="flex items-center gap-3">
@@ -1834,64 +1941,53 @@ export default function Settings() {
                             </div>
                             <div>
                               <p className="font-medium text-sm">WhatsApp</p>
-                              <p className="text-xs text-muted-foreground">Send bulk WhatsApp messages via Twilio</p>
+                              <p className="text-xs text-muted-foreground">Send bulk WhatsApp messages (requires Twilio credentials)</p>
                             </div>
                           </div>
-                          <Switch checked={twWhatsappEnabled} onCheckedChange={setTwWhatsappEnabled} />
+                          <Switch checked={msgWhatsappEnabled} onCheckedChange={setMsgWhatsappEnabled} />
                         </div>
-                        {twWhatsappEnabled && (
+                        {msgWhatsappEnabled && (
                           <div className="pl-4 border-l-2 border-green-200 dark:border-green-800">
                             <Label className="mb-1.5">Twilio WhatsApp Number</Label>
-                            <Input
-                              placeholder="+1234567890"
-                              value={twWhatsappNumber}
-                              onChange={(e) => setTwWhatsappNumber(e.target.value)}
-                              className="font-mono text-sm max-w-sm"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">Your Twilio WhatsApp-enabled number (or Sandbox number for testing)</p>
+                            <Input placeholder="+1234567890" value={msgWhatsappNumber} onChange={(e) => setMsgWhatsappNumber(e.target.value)} className="font-mono text-sm max-w-sm" />
+                            <p className="text-xs text-muted-foreground mt-1">WhatsApp requires Twilio. Use the same Account SID / Auth Token above if using Twilio for SMS too.</p>
                           </div>
                         )}
                       </div>
+
                       <Separator />
                       <div>
                         <p className="text-sm font-medium mb-3">Test Connection</p>
                         <div className="flex gap-3 items-center">
-                          <Button variant="outline" onClick={testTwilio} disabled={twTesting} className="gap-2">
-                            {twTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                            Test Twilio Connection
+                          <Button variant="outline" onClick={testMsgProvider} disabled={msgTesting} className="gap-2">
+                            {msgTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                            Test {SMS_PROVIDERS.find((p) => p.value === msgProvider)?.label} Connection
                           </Button>
                         </div>
-                        {twTestResult && (
-                          <div className={`mt-3 p-3 rounded-lg border text-xs flex items-start gap-2 ${twTestResult.ok ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400" : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400"}`}>
-                            {twTestResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                            <span>{twTestResult.message}</span>
+                        {msgTestResult && (
+                          <div className={`mt-3 p-3 rounded-lg border text-xs flex items-start gap-2 ${msgTestResult.ok ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400" : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400"}`}>
+                            {msgTestResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                            <span>{msgTestResult.message}</span>
                           </div>
                         )}
                       </div>
                       <div className="p-4 rounded-xl bg-muted/40 border text-xs text-muted-foreground space-y-1.5">
-                        <p className="font-semibold text-foreground text-sm">How SMS & WhatsApp broadcasting works</p>
-                        <p>When you send an <strong>SMS</strong> or <strong>WhatsApp campaign</strong> from the Campaigns page, CommsCRM sends the message to all customers who have a phone number on file.</p>
-                        <p className="mt-1">SMS uses your Twilio phone number, WhatsApp uses your Twilio WhatsApp-enabled number. Messages are sent one-by-one through the Twilio API.</p>
-                        <p className="mt-1">For WhatsApp, you need an approved WhatsApp Business profile or use the Twilio Sandbox for testing.</p>
+                        <p className="font-semibold text-foreground text-sm">How bulk messaging works</p>
+                        <p>When you send an <strong>SMS</strong> campaign from the Campaigns page, CommsCRM sends the message to all customers with a phone number using your selected provider.</p>
+                        <p className="mt-1"><strong>WhatsApp</strong> requires Twilio credentials. If you use a different SMS provider, you can still use Twilio just for WhatsApp by entering your Twilio Account SID and Auth Token above.</p>
+                        <p className="mt-1">Supported providers: Twilio, Africa's Talking, Termii, Vonage, Infobip, or any custom HTTP API.</p>
                       </div>
                     </>
                   )}
                 </CardContent>
                 <CardFooter className="border-t bg-muted/20 px-6 py-4">
                   <Button
-                    onClick={() => saveMsgMutation.mutate({
-                      accountSid: twAccountSid || undefined,
-                      authToken: twAuthToken || undefined,
-                      twilioPhoneNumber: twPhoneNumber,
-                      twilioWhatsappNumber: twWhatsappNumber,
-                      smsEnabled: twSmsEnabled,
-                      whatsappEnabled: twWhatsappEnabled,
-                    })}
+                    onClick={() => saveMsgMutation.mutate(buildMsgSavePayload())}
                     disabled={saveMsgMutation.isPending}
                     className="gap-2"
                   >
                     {saveMsgMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Save Twilio Settings
+                    Save Messaging Settings
                   </Button>
                 </CardFooter>
               </Card>
