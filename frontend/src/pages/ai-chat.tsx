@@ -349,6 +349,7 @@ export default function AiChat() {
       const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/ai/settings/test`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ provider: editProvider, model: editModel, apiKey: editApiKey || undefined, baseUrl: editBaseUrl || undefined }),
       });
@@ -395,6 +396,7 @@ export default function AiChat() {
       abortRef.current = new AbortController();
       const response = await fetch(`${baseUrl}/ai/chat`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ systemPrompt, messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })) }),
         signal: abortRef.current.signal,

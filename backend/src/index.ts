@@ -2,8 +2,6 @@ import "dotenv/config";
 import { app } from "./app.js";
 import { connectDatabase } from "./lib/database.js";
 import { logger } from "./lib/logger.js";
-import { ensureSuperAdmin } from "./seeds.js";
-
 import "./models/index.js";
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
