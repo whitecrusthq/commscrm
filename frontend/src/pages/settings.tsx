@@ -503,6 +503,7 @@ export default function Settings() {
       const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/branding`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ appName: brandingName, primaryColor: brandingPrimary, sidebarColor: brandingSidebar, defaultCurrency: brandingCurrency }),
       });
@@ -528,6 +529,7 @@ export default function Settings() {
       form.append("file", file);
       const res = await fetch(`${baseUrl}/branding/upload/${type}`, {
         method: "POST",
+        credentials: "include",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
@@ -624,6 +626,7 @@ export default function Settings() {
       const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/settings/email/validate-domain`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ apiKey: mgApiKey || undefined, domain: mgDomain, region: mgRegion }),
       });
@@ -645,6 +648,7 @@ export default function Settings() {
       const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/settings/email/test`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ testEmail: mgTestEmail, apiKey: mgApiKey || undefined, domain: mgDomain, region: mgRegion, fromEmail: mgFromEmail, fromName: mgFromName }),
       });

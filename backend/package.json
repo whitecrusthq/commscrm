@@ -13,7 +13,7 @@
     "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "db:migrate:status": "npx sequelize-cli db:migrate:status",
     "db:migration:generate": "npx sequelize-cli migration:generate --name",
-    "db:seed": "npm run build && node --enable-source-maps ./dist/seed-runner.mjs"
+    "db:seed": "node --enable-source-maps ./dist/seed-runner.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

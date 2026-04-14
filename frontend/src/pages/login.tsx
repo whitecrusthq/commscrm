@@ -23,8 +23,8 @@ export default function Login() {
   const [, setLocation] = useLocation();
 
   // Step 1: credentials
-  const [email, setEmail] = useState("sarah@commscrm.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -133,12 +133,6 @@ export default function Login() {
                   )}
                 </Button>
               </form>
-
-              <div className="mt-4 p-3 bg-muted/50 rounded-md text-xs text-muted-foreground">
-                <p className="font-medium mb-1">Demo credentials:</p>
-                <p>Email: sarah@commscrm.com</p>
-                <p>Password: password</p>
-              </div>
             </CardContent>
           </Card>
         ) : (

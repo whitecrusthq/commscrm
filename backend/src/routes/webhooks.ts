@@ -1,5 +1,6 @@
 import { Router } from "express";
 import crypto from "crypto";
+import { Op } from "sequelize";
 import { Channel, Customer, Conversation, Message, AiSettings, KnowledgeDoc, AiException } from "../models/index.js";
 import { getAiSettings, generateText } from "../lib/ai-provider.js";
 
@@ -378,6 +379,63 @@ router.get("/widget/history", async (req, res) => {
   } catch (err) {
     console.error("Widget history error:", err);
     res.json({ messages: [] });
+  }
+});
+
+router.get("/widget/messages", async (req, res) => {
+  try {
+    const widgetId = (req.query.widgetId as string | undefined)?.trim();
+    const visitorId = (req.query.visitorId as string | undefined)?.trim();
+    const afterIdRaw = req.query.afterId as string | undefined;
+    const afterId = Number.parseInt(afterIdRaw ?? "0", 10);
+
+    if (!widgetId || !visitorId) {
+      res.status(400).json({ error: "widgetId and visitorId are required" });
+      return;
+    }
+
+    const channel = await Channel.findOne({ where: { type: "widget", webhookVerifyToken: widgetId } });
+    if (!channel) {
+      res.status(404).json({ error: "Widget not found" });
+      return;
+    }
+
+    const identifier = `widget_${visitorId}`;
+    const customer = await Customer.findOne({ where: { phone: identifier, channel: "widget" } });
+    if (!customer) {
+      res.json({ messages: [] });
+      return;
+    }
+
+    const conversation = await Conversation.findOne({
+      where: { customerId: customer.id, channel: "widget" },
+      order: [["lastMessageAt", "DESC"], ["id", "DESC"]],
+    });
+    if (!conversation) {
+      res.json({ messages: [] });
+      return;
+    }
+
+    const where: Record<string, unknown> = {
+      conversationId: conversation.id,
+      sender: { [Op.in]: ["agent", "bot"] },
+    };
+
+    if (Number.isFinite(afterId) && afterId > 0) {
+      where.id = { [Op.gt]: afterId };
+    }
+
+    const messages = await Message.findAll({
+      where,
+      attributes: ["id", "content", "sender", "createdAt"],
+      order: [["id", "ASC"]],
+      limit: 50,
+    });
+
+    res.json({ conversationId: conversation.id, messages });
+  } catch (err) {
+    console.error("Widget messages poll error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

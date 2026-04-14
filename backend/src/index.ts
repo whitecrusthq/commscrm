@@ -11,8 +11,6 @@ const PORT = parseInt(process.env.PORT ?? "3001", 10);
 async function start() {
   await connectDatabase();
 
-  await ensureSuperAdmin();
-
   app.listen(PORT, "0.0.0.0", () => {
     logger.info(`CommsCRM backend running on port ${PORT}`);
   });

@@ -276,7 +276,7 @@ export default function AiChat() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("type", uploadType);
-      const res = await fetch(`${baseUrl}/ai/exceptions/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const res = await fetch(`${baseUrl}/ai/exceptions/upload`, { method: "POST", credentials: "include", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || "Upload failed"); }
       const data = await res.json();
       qc.invalidateQueries({ queryKey: ["ai-exceptions"] });
@@ -312,7 +312,7 @@ export default function AiChat() {
       const baseUrl = getBaseUrl();
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${baseUrl}/ai/knowledge-base`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const res = await fetch(`${baseUrl}/ai/knowledge-base`, { method: "POST", credentials: "include", headers: { Authorization: `Bearer ${token}` }, body: formData });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || "Upload failed"); }
       qc.invalidateQueries({ queryKey: ["knowledge-docs"] });
       toast({ title: "Document uploaded!", description: `"${file.name}" is now part of the AI knowledge base.` });
@@ -333,7 +333,7 @@ export default function AiChat() {
     try {
       const token = localStorage.getItem("crm_token");
       const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/ai/knowledge-base/${doc.id}/preview`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${baseUrl}/ai/knowledge-base/${doc.id}/preview`, { credentials: "include", headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setPreviewDoc({ name: doc.originalName, content: data.content });
     } catch {

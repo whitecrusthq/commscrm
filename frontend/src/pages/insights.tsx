@@ -151,6 +151,7 @@ export default function Insights() {
       const days = dateRange.mode === "preset" ? dateRange.days : 30;
       const res = await fetch(`${baseUrl}/insights/ai-summary`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ days }),
       });

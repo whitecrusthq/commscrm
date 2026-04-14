@@ -34,6 +34,7 @@ export default function PublicFeedback() {
       const baseUrl = getBaseUrl();
       const res = await fetch(`${baseUrl}/feedback/public`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, comment: comment || undefined, customerName: name || undefined, channel: "web" }),
       });

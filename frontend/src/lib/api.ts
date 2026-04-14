@@ -1,5 +1,7 @@
-const API_PREFIX = import.meta.env.VITE_API_PREFIX || "/crm-api";
-const BASE_URL = `${import.meta.env.BASE_URL.replace(/\/$/, "")}${API_PREFIX}`;
+const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const BASE_URL = configuredApiUrl
+  ? configuredApiUrl.replace(/\/$/, "")
+  : `${import.meta.env.BASE_URL.replace(/\/$/, "")}/crm-api`;
 
 export function getBaseUrl(): string {
   return BASE_URL;
@@ -29,7 +31,7 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const response = await fetch(`${BASE_URL}${path}`, { credentials: "include", ...options, headers });
 
   if (response.status === 401) {
     clearToken();
