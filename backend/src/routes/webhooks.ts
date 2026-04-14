@@ -616,6 +616,7 @@ async function loadHistory(){
     var data=await apiCall("GET","/widget/history?widgetId="+encodeURIComponent(wId)+"&visitorId="+encodeURIComponent(visitorId));
     if(data.messages&&data.messages.length>0){
       msgsEl.innerHTML="";
+      conversationStarted=true;
       for(var i=0;i<data.messages.length;i++){
         var m=data.messages[i];
         addMsg(m.content,m.sender==="user"?"usr":"bot",true);
@@ -627,7 +628,19 @@ async function loadHistory(){
     console.error("CommsCRM: history load failed",e);
     if(!msgsEl.children.length)addMsg(greeting,"bot",true);
   }
+  if(conversationStarted){
+    try{
+      var idData=await apiCall("GET","/widget/messages?widgetId="+encodeURIComponent(wId)+"&visitorId="+encodeURIComponent(visitorId));
+      if(idData.messages&&idData.messages.length>0){
+        lastMsgId=idData.messages[idData.messages.length-1].id||0;
+      }
+    }catch(e){}
+  }
 }
+
+var lastMsgId=0;
+var pollTimer=null;
+var conversationStarted=false;
 
 async function send(){
   if(sending)return;
@@ -647,9 +660,9 @@ async function send(){
     hideTyping();
     if(data.aiReply){
       addMsg(data.aiReply,"bot");
-    }else{
-      addMsg("Thanks! An agent will reply shortly.","bot");
     }
+    conversationStarted=true;
+    if(!pollTimer)startPolling();
   }catch(e){
     hideTyping();
     addMsg("Sorry, something went wrong. Please try again.","bot");
@@ -661,10 +674,37 @@ async function send(){
   }
 }
 
+async function pollMessages(){
+  if(!chatOpen&&!conversationStarted)return;
+  try{
+    var url="/widget/messages?widgetId="+encodeURIComponent(wId)+"&visitorId="+encodeURIComponent(visitorId);
+    if(lastMsgId>0)url+="&afterId="+lastMsgId;
+    var data=await apiCall("GET",url);
+    if(data.messages&&data.messages.length>0){
+      for(var i=0;i<data.messages.length;i++){
+        var m=data.messages[i];
+        addMsg(m.content,"bot");
+        if(m.id&&m.id>lastMsgId)lastMsgId=m.id;
+      }
+    }
+  }catch(e){
+    console.error("CommsCRM: poll failed",e);
+  }
+}
+
+function startPolling(){
+  if(pollTimer)return;
+  pollTimer=setInterval(pollMessages,5000);
+}
+
+function stopPolling(){
+  if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
+}
+
 sendBtn.onclick=send;
 txtEl.onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}};
 
-loadHistory();
+loadHistory().then(function(){if(conversationStarted)startPolling();});
 })();`;
 
   res.set("Content-Type", "application/javascript; charset=utf-8");
